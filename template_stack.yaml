@@ -1,0 +1,29 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Resources:
+  Macro:
+    Type: AWS::CloudFormation::Stack
+    Properties:
+      TemplateURL: template_macro.yaml
+  MainStack:
+    Type: AWS::CloudFormation::Stack
+    DependsOn: Macro
+    Properties:
+      TemplateURL: template.yaml
+      Parameters:
+        HelperLambdaRoleArn: 
+          Fn::GetAtt:
+          - Macro
+          - Outputs.HelperLambdaRoleArnOutput
+Outputs:
+  RDSInstanceEndpoint:
+      Description: RDS MySQL Endpoint
+      Value:
+        Fn::GetAtt:
+         - MainStack
+         - Outputs.RDSIP
+  Cloud9EnvUrl:
+      Description: Cloud9 Environment URL
+      Value:
+        Fn::GetAtt:
+         - MainStack
+         - Outputs.Cloud9URL

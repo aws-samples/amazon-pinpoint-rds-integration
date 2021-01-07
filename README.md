@@ -1,11 +1,8 @@
-## My Project
+## Amazon Pinpoint RDS Integration
 
-TODO: Fill this README out!
+This repository contains sample CloudFormation template for the [Updating Opt-in Status for Amazon Pinpoint Channels](https://aws.amazon.com/blogs/messaging-and-targeting/category/messaging/amazon-pinpoint-messaging/) blog.
 
-Be sure to:
-
-* Change the title in this README
-* Edit your repository description on GitHub
+For additional resources, please refer to the official documentation of [Amazon Pinpoint](https://docs.aws.amazon.com/pinpoint/latest/userguide/welcome.html), [Amazon Relational Database Service](https://docs.aws.amazon.com/AmazonRDS/latest/UserGuide/Welcome.html), and [AWS Database Migration Service](https://docs.aws.amazon.com/dms/latest/userguide/Welcome.html).
 
 ## Security
 
@@ -14,4 +11,3 @@ See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more inform
 ## License
 
 This library is licensed under the MIT-0 License. See the LICENSE file.
-

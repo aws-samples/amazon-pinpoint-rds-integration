@@ -1,0 +1,357 @@
+
+# Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+Parameters:
+  VpcCIDR:
+    Description: Please enter the IP range (CIDR notation) for this VPC
+    Type: String
+    Default: 10.1.0.0/16
+  PrivateSubnetRDSCIDR:
+    Description: Please enter the IP range (CIDR notation) for the first private subnet for RDS in AZ-1
+    Type: String
+    Default: 10.1.0.0/24
+  PrivateSubnetRDSCIDR2:
+    Description: Please enter the IP range (CIDR notation) for the second private subnet for RDS in AZ-2
+    Type: String
+    Default: 10.1.1.0/24
+  PrivateSubnetDMSCIDR:
+    Description: Please enter the IP range (CIDR notation) for the private subnet that will hold the DMS replication instance
+    Type: String
+    Default: 10.1.2.0/24
+  PrivateSubnetDMSCIDR2:
+    Description: Please enter the IP range (CIDR notation) for the private subnet that will hold the DMS replication instance
+    Type: String
+    Default: 10.1.3.0/24
+  PublicSubnetCIDR:
+    Description: Please enter the IP range (CIDR notation) for the public subnet that will hold the Cloud9 instance
+    Type: String
+    Default: 10.1.4.0/24
+  MyDBUsername:
+    Description: Please enter master username
+    Type: String
+    Default: admin
+  MyDBPassword:
+    Description: Please enter master user password
+    Type: String
+    Default: mypassword
+  HelperLambdaRoleArn:
+    Description: Lambda Role ARN from Micro Stack
+    Type: String
+Resources:
+  #VPC Resources
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCIDR
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    DependsOn: VPC
+  VPCGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref VPC
+      InternetGatewayId: !Ref InternetGateway
+  PrivateSubnet1:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnetRDSCIDR
+      MapPublicIpOnLaunch: false
+  PrivateSubnet2:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnetRDSCIDR2
+      MapPublicIpOnLaunch: false
+  PrivateSubnet3:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnetDMSCIDR
+      MapPublicIpOnLaunch: false
+  PrivateSubnet4:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PrivateSubnetDMSCIDR2
+      MapPublicIpOnLaunch: false
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      AvailabilityZone: !Select [ 1, !GetAZs  '' ]
+      CidrBlock: !Ref PublicSubnetCIDR
+      MapPublicIpOnLaunch: true
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+     VpcId: !Ref VPC
+  InternetRoute:
+    Type: AWS::EC2::Route
+    DependsOn: VPCGatewayAttachment
+    Properties:
+     DestinationCidrBlock: 0.0.0.0/0
+     GatewayId: !Ref InternetGateway
+     RouteTableId: !Ref RouteTable
+  SubnetARouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+     RouteTableId: !Ref RouteTable
+     SubnetId: !Ref PublicSubnet
+  DBEC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Only access from DMS subnets and public subnet
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        SourceSecurityGroupId: !Ref DMSSecurityGroup
+      - IpProtocol: tcp
+        FromPort: 3306
+        ToPort: 3306
+        CidrIp: !Ref PublicSubnetCIDR
+  DMSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: DMS security group. Outbound only traffic.
+      VpcId: !Ref VPC
+  #RDS Resources
+  MyDBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: BlogRDSSubnetGroup
+      DBSubnetGroupName: BlogRDSSubnetGroup
+      SubnetIds:
+      - Ref: PrivateSubnet1
+      - Ref: PrivateSubnet2
+  RDSDBParameterGroup:
+    Type: "AWS::RDS::DBParameterGroup"
+    Properties:
+      Description: "CloudFormation Parameter Group"
+      Family: mysql5.7
+      Parameters:
+        binlog_format: ROW
+  DBinstance:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '20'
+      DBInstanceClass: db.t2.micro
+      DBName: blog_db
+      CACertificateIdentifier: rds-ca-2019
+      DBSubnetGroupName:
+        Ref: MyDBSubnetGroup
+      AvailabilityZone: !Select [ 0, !GetAZs  '' ]
+      DBParameterGroupName:
+        Ref: RDSDBParameterGroup
+      Engine: MySQL
+      EngineVersion: 5.7.28
+      MasterUserPassword:
+        Ref: MyDBPassword
+      MasterUsername:
+        Ref: MyDBUsername
+      VPCSecurityGroups:
+      - !GetAtt DBEC2SecurityGroup.GroupId
+  #Cloud 9
+  Cloud9:
+    Type: AWS::Cloud9::EnvironmentEC2
+    Properties:
+      AutomaticStopTimeMinutes: 30
+      Description: Pinpoint Blog Cloud9 Environment
+      InstanceType: t2.micro
+      Name: BlogCloud9Environment
+      SubnetId:
+        Ref: PublicSubnet
+  #Kinesis Resource
+  KinesisStream:
+    Type: AWS::Kinesis::Stream
+    Properties:
+      Name: "blogstream"
+      ShardCount: 1
+  KinesisServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - dms.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: Role for DMS to publish to Kinesis
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonKinesisFullAccess
+      RoleName: DMSToKinesisRole
+  #DMS Resources
+  SourceEndpoint:
+    Type: "AWS::DMS::Endpoint"
+    Properties:
+      DatabaseName: blog_db
+      EndpointType: source
+      EngineName: mysql
+      Password: !Ref MyDBPassword
+      Port: 3306
+      ServerName: !GetAtt DBinstance.Endpoint.Address
+      Username: !Ref MyDBUsername
+  TargetEndpoint:
+    Type: "AWS::DMS::Endpoint"
+    Properties:
+      EndpointType: target
+      EngineName: kinesis
+      KinesisSettings: #object
+        MessageFormat: "JSON"
+        ServiceAccessRoleArn: !GetAtt KinesisServiceRole.Arn
+        StreamArn: !GetAtt KinesisStream.Arn
+  MyReplicationSubnetGroup:
+    Type: AWS::DMS::ReplicationSubnetGroup
+    Properties:
+      ReplicationSubnetGroupDescription: BlogReplicationSubnetGroup
+      SubnetIds:
+      - Ref: PrivateSubnet3
+      - Ref: PrivateSubnet4
+  BasicReplicationInstance:
+      Type: "AWS::DMS::ReplicationInstance"
+      Properties:
+        ReplicationInstanceClass: dms.t2.micro
+        ReplicationSubnetGroupIdentifier: !Ref MyReplicationSubnetGroup
+        PubliclyAccessible: false
+        AllocatedStorage: 10
+        VpcSecurityGroupIds:
+        - !Ref DMSSecurityGroup
+  BasicReplicationTask:
+    Type: AWS::DMS::ReplicationTask
+    Properties:
+      ReplicationInstanceArn: !Ref BasicReplicationInstance
+      ReplicationTaskIdentifier: BlogReplicationTask
+      MigrationType: cdc
+      SourceEndpointArn: !Ref SourceEndpoint
+      TargetEndpointArn: !Ref TargetEndpoint
+      TableMappings: "{ \"rules\": [ { \"rule-type\": \"selection\", \"rule-id\": \"1\", \"rule-name\": \"1\", \"object-locator\": { \"schema-name\": \"blog_db\", \"table-name\": \"%\" }, \"rule-action\": \"include\" } ] }"
+  #Pinpoint Resources
+  PinpointApp:
+    Type: AWS::Pinpoint::App
+    Properties:
+      Name: PinpointBlogApp
+  PinpointSMSChannel:
+    Type: AWS::Pinpoint::SMSChannel
+    Properties:
+      ApplicationId: !Ref PinpointApp
+      Enabled: true
+  #Lambda Resources
+  BlogPinPointLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+          from __future__ import print_function
+          import os
+          import json
+          import base64
+          import boto3
+          from datetime import date
+
+          pinpoint_app_id = os.environ['PINPOINT_APPID']
+
+          # Lambda handler
+          def lambda_handler(event, context):
+            # Loop over all records and print out
+            for record in event['Records']:
+              # Decode data
+              payload = json.loads(base64.b64decode(record["kinesis"]["data"]))
+              optOut = 'ALL' if payload['data']['optin'] == 0 else 'NONE'
+              # Validate phone nunber
+              phone_valid = validate_phone(payload['data']['phone'])
+              if phone_valid != False:
+                print('# Phone=VALID OptOut=' + optOut + ' ' + str(payload['data']['optin']))
+                # Update Pinpoint endpoint
+                update_endpoint(payload['metadata']['operation'], payload['data'], phone_valid)
+              else:
+                print('# Phone=ERROR OptOut=' + optOut + ' ' + str(payload['data']['optin']))
+
+          # Validate phone number
+          def validate_phone(phone):
+            client = boto3.client('pinpoint')
+            response = client.phone_number_validate(
+              NumberValidateRequest={
+                'PhoneNumber': phone
+              }
+            )
+            return response
+
+          # Pinpoint update endpoint
+          def update_endpoint(operation, data, phone):
+            client = boto3.client('pinpoint')
+            endpoint_id = data['userid'] + '_' + data['phone']
+            if operation == 'insert' or operation == 'update':
+              print('# Operation=' + operation + ' ' + endpoint_id)
+              optout = 'ALL' if data['optin'] == 0 else 'NONE'
+              response = client.update_endpoint(
+                ApplicationId=pinpoint_app_id,
+                EndpointId=endpoint_id,
+                EndpointRequest={
+                  'Address': phone['NumberValidateResponse']['CleansedPhoneNumberE164'],
+                  'ChannelType': 'SMS',
+                  'EffectiveDate': data['lastupdate'],
+                  'EndpointStatus': 'ACTIVE',
+                  'Demographic': {
+                    'Make': 'apple',
+                    'Model': 'iPhone',
+                    'ModelVersion': '13.5',
+                    'Platform': 'ios'
+                  },
+                  'Location': {
+                    'City': 'Boston',
+                    'Country': 'US'
+                  },
+                  'OptOut': optout,
+                  'User': {
+                    'UserId': data['userid']
+                  }
+                }
+              )
+            elif operation == 'delete':
+              print('# Operation=' + operation + ' ' + endpoint_id)
+              response = client.delete_endpoint(
+                ApplicationId=pinpoint_app_id,
+                EndpointId=endpoint_id
+              )
+      Handler: index.lambda_handler
+      Runtime: python3.7
+      #Timeout: 30
+      Role: !Ref HelperLambdaRoleArn
+      Environment:
+        Variables:
+          PINPOINT_APPID: !Ref PinpointApp
+  #Lambda Event Source
+  LambdaEventSource:
+    Type: AWS::Lambda::EventSourceMapping
+    Properties:
+      EventSourceArn: !GetAtt KinesisStream.Arn
+      FunctionName: !GetAtt BlogPinPointLambda.Arn
+      BatchSize: 10
+      MaximumBatchingWindowInSeconds: 10
+      MaximumRecordAgeInSeconds: 60
+      StartingPosition: "LATEST"
+Outputs:
+  RDSIP:
+    Description: RDS Endpoint
+    Value: !GetAtt DBinstance.Endpoint.Address
+    Export:
+      Name: RDSIP
+  Cloud9URL:
+    Description: Cloud9 Environment
+    Value:
+      Fn::Join:
+      - ''
+      - - !Sub https://${AWS::Region}.console.aws.amazon.com/cloud9/ide/
+        - !Ref 'Cloud9'

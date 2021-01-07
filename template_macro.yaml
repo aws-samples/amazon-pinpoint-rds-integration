@@ -1,0 +1,72 @@
+Resources:
+  HelperLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: blogHelperLambdaRole
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - lambda.amazonaws.com
+              - pinpoint.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: Role for helper lambda
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaKinesisExecutionRole
+      - arn:aws:iam::aws:policy/IAMReadOnlyAccess
+
+  HelperLambdaPolicy:
+    Type: 'AWS::IAM::Policy'
+    Properties:
+      PolicyName: blogHelperLambdaPolicy
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - "mobiletargeting:CreateImportJob"
+              - "mobiletargeting:GetImportJobs"
+              - "mobiletargeting:UpdateEndpoint"
+              - "mobiletargeting:DeleteEndpoint"
+              - "mobiletargeting:PhoneNumberValidate"
+              - "iam:GetRole"
+              - "iam:PassRole"
+            Resource: '*'
+      Roles:
+        - !Ref HelperLambdaRole
+
+  DMSVPCRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+              - dms.amazonaws.com
+            Action:
+              - 'sts:AssumeRole'
+      Description: Role for DMS to assume role
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonDMSVPCManagementRole
+      RoleName: dms-vpc-role
+    #DeletionPolicy: Retain
+
+    #BlogHelperMacro:
+    #  Type: AWS::CloudFormation::Macro
+    #  Properties:
+    #    Description: Blog Helper Macro
+    #    FunctionName: !GetAtt BlogPinPointLambda.Arn
+    #    Name: BlogHelperMacro
+
+Outputs:
+  HelperLambdaRoleArnOutput:
+    Description: Lambda Role ARN
+    Value: !GetAtt HelperLambdaRole.Arn
+
