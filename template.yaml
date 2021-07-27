@@ -28,13 +28,20 @@ Parameters:
     Type: String
     Default: 10.1.4.0/24
   MyDBUsername:
-    Description: Please enter master username
+    Description: Please enter master username (Defailt is admin)
     Type: String
     Default: admin
+    MinLength: 1
+    MaxLength: 16
+    AllowedPattern: "[a-zA-Z][a-zA-Z0-9]*"
   MyDBPassword:
-    Description: Please enter master user password
+    NoEcho: true
+    Description: Please enter master user password (Default is mypassword)
     Type: String
     Default: mypassword
+    MinLength: 1
+    MaxLength: 41
+    AllowedPattern: "[a-zA-Z0-9]*"
   HelperLambdaRoleArn:
     Description: Lambda Role ARN from Micro Stack
     Type: String
