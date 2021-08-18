@@ -183,6 +183,9 @@ Resources:
     Properties:
       Name: "blogstream"
       ShardCount: 1
+      StreamEncryption:
+        EncryptionType: KMS
+        KeyId: alias/aws/kinesis
   KinesisServiceRole:
     Type: AWS::IAM::Role
     Properties:
